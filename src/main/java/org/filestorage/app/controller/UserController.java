@@ -16,17 +16,15 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserService userService;
-
     @GetMapping("/user/me")
-    public ResponseEntity<Map<String, String>> getUser(HttpServletRequest req, HttpServletResponse res) {
+    public ResponseEntity<Map<String, String>> getUser(HttpServletRequest request, HttpServletResponse response) {
 
-        if(req.getSession().getAttribute("username") == null) {
+        if(request.getSession().getAttribute("username") == null) {
             throw new UserNotAuthorizedException("user not authorized");
         }
 
         return ResponseEntity
                 .status(HttpStatus.OK)
-                .body(Map.of("message", req.getSession().getAttribute("username").toString()));
+                .body(Map.of("message", request.getSession().getAttribute("username").toString()));
     }
 }
