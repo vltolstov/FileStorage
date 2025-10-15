@@ -31,9 +31,7 @@ public class AuthController {
         HttpSession session = request.getSession();
         session.setAttribute("username", userRequest.getUsername());
 
-        Cookie cookie = new Cookie("JSESSIONID", session.getId());
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
+        Cookie cookie = cookieInit(session.getId());
         response.addCookie(cookie);
 
         return ResponseEntity
@@ -48,9 +46,7 @@ public class AuthController {
         HttpSession session = request.getSession();
         session.setAttribute("username", userRequest.getUsername());
 
-        Cookie cookie = new Cookie("JSESSIONID", session.getId());
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
+        Cookie cookie = cookieInit(session.getId());
         response.addCookie(cookie);
 
         return ResponseEntity
@@ -66,14 +62,24 @@ public class AuthController {
         }
 
         request.getSession().removeAttribute("username");
-        Cookie cookie = new Cookie("JSESSIONID", "");
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
+
+        Cookie cookie = cookieInit("");
         response.addCookie(cookie);
 
         return ResponseEntity
                 .noContent()
                 .build();
+    }
+
+    private Cookie cookieInit(String sessionId) {
+        Cookie cookie = new Cookie("JSESSIONID", sessionId);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/");
+
+        if (sessionId.equals("")) {
+            cookie.setMaxAge(0);
+        }
+        return cookie;
     }
 
 }
