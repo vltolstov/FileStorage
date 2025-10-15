@@ -1,3 +1,4 @@
+### Post registration user
 POST http://localhost:8080/api/auth/sign-up
 Content-Type: application/json
 Accept: application/json
