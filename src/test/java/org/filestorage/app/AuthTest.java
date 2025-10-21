@@ -1,16 +1,18 @@
 package org.filestorage.app;
 
-import jakarta.servlet.http.HttpSession;
 import org.filestorage.app.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -69,16 +71,19 @@ public class AuthTest {
     }
 
     @Test
-    void shouldSetSessionAtRegistration() throws Exception {
+    void shouldAuthenticateUserInSession() throws Exception {
         MvcResult result = mockMvc.perform(post("/auth/sign-up")
                 .contentType("application/json")
                 .content(REQUEST_BODY))
-                .andExpect(status().isCreated())
                 .andReturn();
 
-        HttpSession session = result.getRequest().getSession(false);
-        assertNotNull(session);
-        assertEquals("testUserName", session.getAttribute("username"));
+        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+        SecurityContext context = (SecurityContext) session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+        assertNotNull(context, "Security context is null");
+
+        Authentication auth = context.getAuthentication();
+        assertNotNull(auth, "Authentication is null");
+        assertEquals("testUserName", auth.getName());
     }
 
     @Test
@@ -143,9 +148,13 @@ public class AuthTest {
 
         MvcResult result = mockMvc.perform(post("/auth/sign-in").contentType("application/json").content(REQUEST_BODY)).andReturn();
 
-        HttpSession session = result.getRequest().getSession(false);
-        assertNotNull(session);
-        assertEquals("testUserName", session.getAttribute("username"));
+        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
+        assertNotNull(session, "Session is null");
+
+        SecurityContext context = (SecurityContext) session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+        Authentication auth = context.getAuthentication();
+
+        assertEquals("testUserName", auth.getName());
     }
 
     @Test
@@ -161,10 +170,11 @@ public class AuthTest {
 
     @Test
     void shouldReturnNoContentWhenUserSignOut() throws Exception {
-        mockMvc.perform(post("/auth/sign-up").contentType("application/json").content(REQUEST_BODY)).andReturn();
+        MvcResult result = mockMvc.perform(post("/auth/sign-up").contentType("application/json").content(REQUEST_BODY)).andReturn();
 
+        MockHttpSession session = (MockHttpSession) result.getRequest().getSession(false);
         mockMvc.perform(post("/auth/sign-out")
-                        .with(httpBasic("testUserName", "testPassword")))
+                        .session(session))
                 .andExpect(status().isNoContent());
     }
 }
