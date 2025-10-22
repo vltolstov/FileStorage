@@ -1,5 +1,8 @@
 package org.filestorage.app.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserController {
 
+    @Operation(summary = "Информация о пользователе", description = "Возвращает username пользователя")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Успех"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не авторизован")
+    })
     @GetMapping("/user/me")
     public ResponseEntity<Map<String, String>> getUser(HttpServletRequest request, HttpServletResponse response) {
 
