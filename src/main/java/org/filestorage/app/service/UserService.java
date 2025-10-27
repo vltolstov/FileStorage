@@ -22,6 +22,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final MinioService minioService;
 
     public UserResponse create(UserRequest userRequest) {
         if(userRepository.existsByName(userRequest.getUsername())) {
@@ -31,6 +32,8 @@ public class UserService {
         User user = userMapper.toEntity(userRequest);
         user.setPassword(passwordEncoder.encode(userRequest.getPassword()));
         user = userRepository.save(user);
+
+        minioService.createUserPrefix(user.getId());
 
         return userMapper.toResponse(user);
     }
