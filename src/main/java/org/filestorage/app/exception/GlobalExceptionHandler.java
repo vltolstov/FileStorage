@@ -46,10 +46,26 @@ public class GlobalExceptionHandler {
                 .body(Map.of("message", exception.getMessage()));
     }
 
+    @ExceptionHandler
+    public ResponseEntity<Map<String, String>> handlePathNotValid(PathNotValidException exception) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", exception.getMessage()));
+    }
+
+    @ExceptionHandler
+    public ResponseEntity<Map<String, String>> hanldeResourceNotFound(ResourceNotFoundException exception) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(Map.of("message", exception.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleException(Exception exception) {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("message", exception.getMessage()));
     }
+
+
 }
