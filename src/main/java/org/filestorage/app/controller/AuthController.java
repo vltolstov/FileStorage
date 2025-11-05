@@ -9,9 +9,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.filestorage.app.config.UserDetailsServiceImpl;
 import org.filestorage.app.dto.UserRequest;
 import org.filestorage.app.dto.UserResponse;
 import org.filestorage.app.exception.UserNotAuthorizedException;
+import org.filestorage.app.model.User;
 import org.filestorage.app.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +34,7 @@ import java.util.Map;
 public class AuthController {
 
     private final UserService userService;
+    private final UserDetailsServiceImpl userDetailsServiceImpl;
 
     @Operation(summary = "Регистрация пользователя", description = "Возвращает username пользователя")
     @ApiResponses({
@@ -93,8 +96,16 @@ public class AuthController {
     }
 
     private void authenticateSession(HttpServletRequest request, HttpServletResponse response, String username) {
+//        Authentication authentication =
+//                new UsernamePasswordAuthenticationToken(username, null, List.of());
+
+        User userDetails = (User) userDetailsServiceImpl.loadUserByUsername(username);
         Authentication authentication =
-                new UsernamePasswordAuthenticationToken(username, null, List.of());
+                new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        List.of()
+                );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
