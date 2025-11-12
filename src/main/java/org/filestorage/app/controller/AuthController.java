@@ -96,9 +96,6 @@ public class AuthController {
     }
 
     private void authenticateSession(HttpServletRequest request, HttpServletResponse response, String username) {
-//        Authentication authentication =
-//                new UsernamePasswordAuthenticationToken(username, null, List.of());
-
         User userDetails = (User) userDetailsServiceImpl.loadUserByUsername(username);
         Authentication authentication =
                 new UsernamePasswordAuthenticationToken(
