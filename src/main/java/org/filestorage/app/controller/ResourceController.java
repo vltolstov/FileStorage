@@ -47,12 +47,20 @@ public class ResourceController {
                 .body(resourceResponse);
     }
 
+    @Operation(summary = "Удаление ресурса", description = "Возвращает ответ с пустым телом. Код 204")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Ресурс найден и удален"),
+            @ApiResponse(responseCode = "400", description = "Ошибка валидации"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не авторизован"),
+            @ApiResponse(responseCode = "404", description = "Ресурс не найден"),
+            @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
+    })
     @DeleteMapping("/resource")
     public ResponseEntity deleteResource(@RequestParam String path, @AuthenticationPrincipal User user){
         pathValidation(path);
         prefixValidation(path, user.getId());
 
-        //тут удаление
+        minioService.deleteResource(path, user.getId());
 
         return ResponseEntity
                 .noContent()

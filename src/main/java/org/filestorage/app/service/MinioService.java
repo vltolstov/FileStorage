@@ -3,9 +3,13 @@ package org.filestorage.app.service;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
+import io.minio.RemoveObjectsArgs;
 import io.minio.Result;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
+import io.minio.messages.DeleteError;
+import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import org.filestorage.app.exception.MinioOperationException;
@@ -16,6 +20,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +43,14 @@ public class MinioService {
             return getDirectory(path);
         } else {
             return getFile(path, userId);
+        }
+    }
+
+    public void deleteResource(String path, Long userId){
+        if(path.endsWith("/")){
+            deleteDirectory(path, userId);
+        } else {
+            deleteFile(path, userId);
         }
     }
 
@@ -65,6 +79,59 @@ public class MinioService {
             );
         } catch (Exception e) {
             throw new MinioOperationException("Error getting file " + path);
+        }
+    }
+
+    private void deleteDirectory(String path, Long userId){
+        try {
+            Iterable<Result<Item>> results = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(defaultBucket)
+                            .prefix(getUserPrefix(userId) + path)
+                            .recursive(true)
+                            .build()
+            );
+
+            List<DeleteObject> objects = StreamSupport.stream(results.spliterator(), false)
+                    .map(result -> {
+                        try {
+                            return new DeleteObject(result.get().objectName());
+                        } catch (Exception e) {
+                            throw new MinioOperationException("Error collect files for deleting from " + path);
+                        }
+                    })
+                    .toList();
+
+            if(objects.isEmpty()){
+                objects.add(new DeleteObject(getUserPrefix(userId) + path));
+            }
+
+            minioClient.removeObjects(
+                    RemoveObjectsArgs.builder()
+                            .bucket(defaultBucket)
+                            .objects(objects)
+                            .build()
+            ).forEach(result -> {
+                try { result.get(); } catch (Exception e) {
+                    throw new MinioOperationException("Error deleting files from " + path);
+                }
+            });
+
+        } catch (Exception e) {
+            throw new MinioOperationException("Error deleting directory " + path);
+        }
+    }
+
+    private void deleteFile(String path, Long userId){
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(defaultBucket)
+                            .object(getUserPrefix(userId) + path)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new MinioOperationException("Error deleting file " + path);
         }
     }
 
