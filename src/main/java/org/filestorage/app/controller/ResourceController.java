@@ -1,5 +1,6 @@
 package org.filestorage.app.controller;
 
+import io.minio.GetObjectResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -11,13 +12,16 @@ import org.filestorage.app.mapper.ResourceDataResponseMapper;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.model.User;
 import org.filestorage.app.service.MinioService;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @RestController
 @RequiredArgsConstructor
@@ -67,6 +71,26 @@ public class ResourceController {
                 .build();
     }
 
+    @Operation(summary = "Скачивание ресурса", description = "Возвращает бинарное содержимое с Content-Type: application/octet-stream")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ресурс найден. Скачивание"),
+            @ApiResponse(responseCode = "400", description = "Ошибка валидации"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не авторизован"),
+            @ApiResponse(responseCode = "404", description = "Ресурс не найден"),
+            @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
+    })
+    @GetMapping("/resource/download")
+    public ResponseEntity<StreamingResponseBody> downloadResource(@RequestParam String path, @AuthenticationPrincipal User user){
+        pathValidation(path);
+        prefixValidation(path, user.getId());
+
+        StreamingResponseBody streamResponse = minioService.downloadResource(path, user.getId());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(streamResponse);
+    }
+
     private void pathValidation(String path) {
         if(path == null || path.isBlank()){
             throw new PathNotValidException("Path not valid");
@@ -76,7 +100,7 @@ public class ResourceController {
     private void prefixValidation(String path, Long userId){
         if(path.endsWith("/")){
             if(!minioService.isFolderExist(path, userId)){
-                throw new ResourceNotFoundException("Folder " + path + " not found");
+                throw new ResourceNotFoundException("Directory " + path + " not found");
             }
         } else {
             if(!minioService.isFileExist(path, userId)){
@@ -85,15 +109,6 @@ public class ResourceController {
         }
 
     }
-
-
-    //Удаление ресурса
-    //
-    //DELETE /resource?path=$path
-
-    //Скачивание ресурса
-    //
-    //GET /resource/download?path=$path
 
     //Переименование/перемещение ресурса
     //
