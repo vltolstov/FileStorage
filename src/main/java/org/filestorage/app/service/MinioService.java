@@ -1,11 +1,11 @@
 package org.filestorage.app.service;
 
 import io.minio.*;
-import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import org.filestorage.app.exception.MinioOperationException;
+import org.filestorage.app.exception.ResourceAlreadyExistException;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.util.ResourceType;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,9 +14,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -49,6 +48,28 @@ public class MinioService {
             deleteDirectory(path, userId);
         } else {
             deleteFile(path, userId);
+        }
+    }
+
+    public StreamingResponseBody downloadResource(String path, Long userId){
+        if(path.endsWith("/")){
+            return downloadDirectory(path, userId);
+        } else {
+            return downloadFile(path, userId);
+        }
+    }
+
+    public void moveResource(String from, String to, Long userId){
+        if(from.endsWith("/")){
+            if(isDirectoryExist(to, userId)){
+                throw new ResourceAlreadyExistException("Directory " + to + " already exists");
+            }
+            moveDirectory(from, to, userId);
+        } else {
+            if(isFileExist(to, userId)){
+                throw new ResourceAlreadyExistException("File " + to + " already exists");
+            }
+            moveFile(from, to, userId);
         }
     }
 
@@ -133,14 +154,6 @@ public class MinioService {
         }
     }
 
-    public StreamingResponseBody downloadResource(String path, Long userId){
-        if(path.endsWith("/")){
-            return downloadDirectory(path, userId);
-        } else {
-            return downloadFile(path, userId);
-        }
-    }
-
     private StreamingResponseBody downloadDirectory(String path, Long userId){
         try {
             Iterable<Result<Item>> results = minioClient.listObjects(
@@ -198,11 +211,83 @@ public class MinioService {
         }
     }
 
-    private List<MinioResource> getDirectoryResources(String path, Long userId){
-        return List.of(new MinioResource());
+    private void moveDirectory(String from, String to, Long userId){
+
+        String source = getUserPrefix(userId) + from;
+
+        try {
+            List<Item> items = new ArrayList<>();
+
+            Iterable<Result<Item>> results = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(defaultBucket)
+                            .prefix(source)
+                            .recursive(true)
+                            .build()
+            );
+
+            for (Result<Item> result : results) {
+                items.add(result.get());
+            }
+
+            for (Item item : items) {
+                String target = item.objectName().replaceFirst(source, "");
+
+                minioClient.copyObject(
+                        CopyObjectArgs.builder()
+                                .bucket(defaultBucket)
+                                .object(getUserPrefix(userId) + to + target)
+                                .source(
+                                        CopySource.builder()
+                                                .bucket(defaultBucket)
+                                                .object(item.objectName())
+                                                .build()
+                                )
+                                .build()
+                );
+            }
+
+            for (Item item : items) {
+                minioClient.removeObject(
+                        RemoveObjectArgs.builder()
+                                .bucket(defaultBucket)
+                                .object(item.objectName())
+                                .build()
+                );
+            }
+        } catch (Exception e) {
+            throw new MinioOperationException("Error moving directory " + from + " to " + to);
+        }
     }
 
-    public boolean isFolderExist(String path, Long userId){
+    private void moveFile(String from, String to, Long userId){
+        String sourcePath = getUserPrefix(userId) + from;
+        String targetPath = getUserPrefix(userId) + to;
+        try{
+            minioClient.copyObject(
+                    CopyObjectArgs.builder()
+                            .bucket(defaultBucket)
+                            .object(targetPath)
+                            .source(
+                                    CopySource.builder()
+                                            .bucket(defaultBucket)
+                                            .object(sourcePath)
+                                            .build()
+                            )
+                            .build()
+            );
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(defaultBucket)
+                            .object(sourcePath)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new MinioOperationException("Error move file " + from + " to " + to);
+        }
+    }
+
+    public boolean isDirectoryExist(String path, Long userId){
         try {
             Iterable<Result<Item>> results = minioClient.listObjects(
                     ListObjectsArgs.builder()
@@ -269,14 +354,6 @@ public class MinioService {
         int slashIndex = sourcePath.lastIndexOf("/");
         return slashIndex < 1 ? "/" : sourcePath.substring(0, slashIndex + 1);
     }
-
-    //Скачивание ресурса
-    //
-    //GET /resource/download?path=$path
-
-    //Переименование/перемещение ресурса
-    //
-    //GET /resource/move?from=$from&to=$to
 
     //Поиск
     //

@@ -60,6 +60,13 @@ public class GlobalExceptionHandler {
                 .body(Map.of("message", exception.getMessage()));
     }
 
+    @ExceptionHandler
+    public ResponseEntity<Map<String, String>> handleResourceAlreadyExist(ResourceAlreadyExistException exception) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of("message", exception.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleException(Exception exception) {
         return ResponseEntity

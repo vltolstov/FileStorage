@@ -1,6 +1,5 @@
 package org.filestorage.app.controller;
 
-import io.minio.GetObjectResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -12,7 +11,6 @@ import org.filestorage.app.mapper.ResourceDataResponseMapper;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.model.User;
 import org.filestorage.app.service.MinioService;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -91,6 +89,30 @@ public class ResourceController {
                 .body(streamResponse);
     }
 
+    @Operation(summary = "Перемещение или переименование ресурса", description = "Возвращает путь, имя, размер(для файла), тип ресурса")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Ресурс перемещен/переименован"),
+            @ApiResponse(responseCode = "400", description = "Ошибки валидации"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не авторизован"),
+            @ApiResponse(responseCode = "404", description = "Ресурс не найден"),
+            @ApiResponse(responseCode = "409", description = "Такой ресурс уже содержится по данному пути"),
+            @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
+    })
+    @GetMapping("/resource/move")
+    public ResponseEntity moveResource(@RequestParam String from, @RequestParam String to, @AuthenticationPrincipal User user){
+        pathValidation(from);
+        pathValidation(to);
+        prefixValidation(from, user.getId());
+
+        minioService.moveResource(from, to, user.getId());
+        MinioResource minioResource = minioService.getResource(to, user.getId());
+        ResourceResponse resourceResponse = resourceDataResponseMapper.toResponse(minioResource);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(resourceResponse);
+    }
+
     private void pathValidation(String path) {
         if(path == null || path.isBlank()){
             throw new PathNotValidException("Path not valid");
@@ -99,7 +121,7 @@ public class ResourceController {
 
     private void prefixValidation(String path, Long userId){
         if(path.endsWith("/")){
-            if(!minioService.isFolderExist(path, userId)){
+            if(!minioService.isDirectoryExist(path, userId)){
                 throw new ResourceNotFoundException("Directory " + path + " not found");
             }
         } else {
@@ -109,10 +131,6 @@ public class ResourceController {
         }
 
     }
-
-    //Переименование/перемещение ресурса
-    //
-    //GET /resource/move?from=$from&to=$to
 
     //Поиск
     //
