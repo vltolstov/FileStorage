@@ -4,12 +4,15 @@ import io.minio.*;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
+import org.filestorage.app.dto.ResourceResponse;
 import org.filestorage.app.exception.MinioOperationException;
 import org.filestorage.app.exception.ResourceAlreadyExistException;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.util.ResourceType;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.ByteArrayInputStream;
@@ -71,6 +74,23 @@ public class MinioService {
             }
             moveFile(from, to, userId);
         }
+    }
+
+    public void uploadResource(String path, Long userId, MultipartFile[] resources) {
+        for(MultipartFile resource : resources) {
+            uploadProcess(path, userId, resource);
+        }
+    }
+
+    public List<MinioResource> getResources(String path, Long userId){
+        List<MinioResource> resources = new ArrayList<>();
+
+        if(path.endsWith("/")){
+
+        } else {
+            resources.add(getFile(path, userId));
+        }
+        return resources;
     }
 
     private MinioResource getDirectory(String path){
@@ -287,6 +307,33 @@ public class MinioService {
         }
     }
 
+    private void uploadProcess(String path, Long userId, MultipartFile resource){
+
+        String target = path + resource.getOriginalFilename();
+
+        if(isFileExist(target, userId)) {
+            throw new ResourceAlreadyExistException("File already exists");
+        }
+        if(isDirectoryExist(target, userId)) {
+            throw new ResourceAlreadyExistException("Directory already exists");
+        }
+        if(resource.isEmpty()) {
+            throw new MinioOperationException("Resource is empty");
+        };
+
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(defaultBucket)
+                            .object(getUserPrefix(userId) + target)
+                            .stream(resource.getInputStream(), resource.getSize(), -1)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new MinioOperationException("Error uploading file " + path);
+        }
+    }
+
     public boolean isDirectoryExist(String path, Long userId){
         try {
             Iterable<Result<Item>> results = minioClient.listObjects(
@@ -354,14 +401,6 @@ public class MinioService {
         int slashIndex = sourcePath.lastIndexOf("/");
         return slashIndex < 1 ? "/" : sourcePath.substring(0, slashIndex + 1);
     }
-
-    //Поиск
-    //
-    //GET /resource/search?query=$query
-
-    //Аплоад
-    //
-    //POST resource?path=$path
 
     //Папки
     //

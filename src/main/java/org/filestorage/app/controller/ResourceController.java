@@ -17,9 +17,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -113,6 +119,30 @@ public class ResourceController {
                 .body(resourceResponse);
     }
 
+    @Operation(summary = "Загрузка ресурса", description = "Возвращает коллекцию ресурсов в формате путь, имя, размер, тип")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Ресурс загружен"),
+            @ApiResponse(responseCode = "400", description = "Ошибки валидации"),
+            @ApiResponse(responseCode = "409", description = "Такой ресурс уже содержится по данному пути"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не авторизован"),
+            @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
+    })
+    @PostMapping("/resource")
+    public ResponseEntity<List<ResourceResponse>> uploadResource(@RequestParam String path, @RequestParam MultipartFile[] resources, @AuthenticationPrincipal User user) {
+        pathValidation(path);
+
+        minioService.uploadResource(path, user.getId(), resources);
+        List<MinioResource> uploadedResources = minioService.getResources(path, user.getId());
+
+        List<ResourceResponse> resultList = uploadedResources.stream()
+                .map(resourceDataResponseMapper::toResponse)
+                .toList();
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(resultList);
+    }
+
     private void pathValidation(String path) {
         if(path == null || path.isBlank()){
             throw new PathNotValidException("Path not valid");
@@ -131,13 +161,5 @@ public class ResourceController {
         }
 
     }
-
-    //Поиск
-    //
-    //GET /resource/search?query=$query
-
-    //Аплоад
-    //
-    //POST resource?path=$path
 
 }
