@@ -18,6 +18,12 @@ public class PathValidator {
         }
     }
 
+    public void directoryPathValidation(String path) {
+        if(path == null || path.isBlank() || !path.endsWith("/")){
+            throw new PathNotValidException("Path not valid");
+        }
+    }
+
     public void prefixValidation(String path, Long userId){
         if(path.endsWith("/")){
             if(!minioService.isDirectoryExist(path, userId)){
@@ -28,7 +34,6 @@ public class PathValidator {
                 throw new ResourceNotFoundException("File " + path + " not found");
             }
         }
-
     }
 
 }
