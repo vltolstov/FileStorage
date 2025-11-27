@@ -426,14 +426,4 @@ public class MinioService {
         return slashIndex < 1 ? "/" : sourcePath.substring(0, slashIndex + 1);
     }
 
-    //Папки
-    //
-    //Получение информации о содержимом папки
-    //
-    //GET /directory?path=$path
-
-    //Создание / аплоад пустой папки.
-    //
-    //POST /directory?path=$path
-
 }

@@ -5,12 +5,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.filestorage.app.dto.ResourceResponse;
-import org.filestorage.app.exception.PathNotValidException;
-import org.filestorage.app.exception.ResourceNotFoundException;
 import org.filestorage.app.mapper.ResourceDataResponseMapper;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.model.User;
 import org.filestorage.app.service.MinioService;
+import org.filestorage.app.util.PathValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -18,14 +17,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -33,6 +30,7 @@ public class ResourceController {
 
     private final MinioService minioService;
     private final ResourceDataResponseMapper resourceDataResponseMapper;
+    private final PathValidator pathValidator;
 
     @Operation(summary = "Получение информации о ресурсе", description = "Возвращает путь, имя, размер(для файла), тип ресурса")
     @ApiResponses(value = {
@@ -44,8 +42,8 @@ public class ResourceController {
     })
     @GetMapping("/resource")
     public ResponseEntity<ResourceResponse> getResourceData(@RequestParam String path, @AuthenticationPrincipal User user){
-        pathValidation(path);
-        prefixValidation(path, user.getId());
+        pathValidator.pathValidation(path);
+        pathValidator.prefixValidation(path, user.getId());
 
         MinioResource minioResource = minioService.getResource(path, user.getId());
         ResourceResponse resourceResponse = resourceDataResponseMapper.toResponse(minioResource);
@@ -64,9 +62,9 @@ public class ResourceController {
             @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
     })
     @DeleteMapping("/resource")
-    public ResponseEntity deleteResource(@RequestParam String path, @AuthenticationPrincipal User user){
-        pathValidation(path);
-        prefixValidation(path, user.getId());
+    public ResponseEntity<ResourceResponse> deleteResource(@RequestParam String path, @AuthenticationPrincipal User user){
+        pathValidator.pathValidation(path);
+        pathValidator.prefixValidation(path, user.getId());
 
         minioService.deleteResource(path, user.getId());
 
@@ -85,8 +83,8 @@ public class ResourceController {
     })
     @GetMapping("/resource/download")
     public ResponseEntity<StreamingResponseBody> downloadResource(@RequestParam String path, @AuthenticationPrincipal User user){
-        pathValidation(path);
-        prefixValidation(path, user.getId());
+        pathValidator.pathValidation(path);
+        pathValidator.prefixValidation(path, user.getId());
 
         StreamingResponseBody streamResponse = minioService.downloadResource(path, user.getId());
 
@@ -105,10 +103,10 @@ public class ResourceController {
             @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
     })
     @GetMapping("/resource/move")
-    public ResponseEntity moveResource(@RequestParam String from, @RequestParam String to, @AuthenticationPrincipal User user){
-        pathValidation(from);
-        pathValidation(to);
-        prefixValidation(from, user.getId());
+    public ResponseEntity<ResourceResponse> moveResource(@RequestParam String from, @RequestParam String to, @AuthenticationPrincipal User user){
+        pathValidator.pathValidation(from);
+        pathValidator.pathValidation(to);
+        pathValidator.prefixValidation(from, user.getId());
 
         minioService.moveResource(from, to, user.getId());
         MinioResource minioResource = minioService.getResource(to, user.getId());
@@ -129,7 +127,7 @@ public class ResourceController {
     })
     @PostMapping("/resource")
     public ResponseEntity<List<ResourceResponse>> uploadResource(@RequestParam String path, @RequestParam MultipartFile[] resources, @AuthenticationPrincipal User user) {
-        pathValidation(path);
+        pathValidator.pathValidation(path);
 
         minioService.uploadResource(path, user.getId(), resources);
         List<MinioResource> uploadedResources = minioService.getResources(path, user.getId());
@@ -141,25 +139,6 @@ public class ResourceController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(resultList);
-    }
-
-    private void pathValidation(String path) {
-        if(path == null || path.isBlank()){
-            throw new PathNotValidException("Path not valid");
-        }
-    }
-
-    private void prefixValidation(String path, Long userId){
-        if(path.endsWith("/")){
-            if(!minioService.isDirectoryExist(path, userId)){
-                throw new ResourceNotFoundException("Directory " + path + " not found");
-            }
-        } else {
-            if(!minioService.isFileExist(path, userId)){
-                throw new ResourceNotFoundException("File " + path + " not found");
-            }
-        }
-
     }
 
 }
