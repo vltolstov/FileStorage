@@ -85,11 +85,35 @@ public class MinioService {
     public List<MinioResource> getResources(String path, Long userId){
         List<MinioResource> resources = new ArrayList<>();
 
-        if(path.endsWith("/")){
+        try {
+            Iterable<Result<Item>> results = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(defaultBucket)
+                            .prefix(getUserPrefix(userId) + path)
+                            .build()
+            );
 
-        } else {
-            resources.add(getFile(path, userId));
+            for (Result<Item> result : results) {
+                Item item = result.get();
+
+                MinioResource resource = new MinioResource();
+                if(item.objectName().endsWith("/")){
+                    resource.setPath(path);
+                    resource.setName(extractDirectoryName(item.objectName()));
+                    resource.setType(ResourceType.DIRECTORY);
+                } else {
+                    resource.setPath(path);
+                    resource.setName(extractFileName(item.objectName()));
+                    resource.setSize(item.size());
+                    resource.setType(ResourceType.FILE);
+                }
+
+                resources.add(resource);
+            }
+        } catch (Exception e) {
+            throw new MinioOperationException("Error getting resources list from " + path);
         }
+
         return resources;
     }
 
