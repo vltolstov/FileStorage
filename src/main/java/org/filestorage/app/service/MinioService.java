@@ -10,6 +10,7 @@ import org.filestorage.app.exception.ResourceAlreadyExistException;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.util.ResourceType;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.PropertyResolver;
 import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +29,7 @@ import java.util.zip.ZipOutputStream;
 @RequiredArgsConstructor
 public class MinioService {
 
+    private final PropertyResolver propertyResolver;
     @Value("${minio.default.bucket}")
     private String defaultBucket;
 
@@ -121,6 +123,24 @@ public class MinioService {
         }
 
         return resources;
+    }
+
+    public void createDirectory(String path, Long userId){
+        if(isDirectoryExist(path, userId)){
+            throw new ResourceAlreadyExistException("Directory " + path + " already exists");
+        }
+
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(defaultBucket)
+                            .object(getUserPrefix(userId) + path)
+                            .stream(new ByteArrayInputStream(new byte[0]), 0, -1)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new MinioOperationException("Error creating directory " + path);
+        }
     }
 
     private MinioResource getDirectory(String path){

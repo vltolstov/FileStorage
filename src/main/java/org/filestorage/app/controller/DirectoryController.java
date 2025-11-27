@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -54,12 +53,25 @@ public class DirectoryController {
                 .body(resultList);
     }
 
+    @Operation
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Возвращает путь, имя папки и тип"),
+            @ApiResponse(responseCode = "400", description = "Ошибки валидации"),
+            @ApiResponse(responseCode = "401", description = "Пользователь не авторизован"),
+            @ApiResponse(responseCode = "404", description = "Родительская папка не существует"),
+            @ApiResponse(responseCode = "409", description = "Папка уже существует"),
+            @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
+    })
     @PostMapping("/directory")
-    public void postDirectory(@RequestParam String path, @AuthenticationPrincipal User user) {
-        pathValidator.pathValidation(path);
+    public ResponseEntity<ResourceResponse> postDirectory(@RequestParam String path, @AuthenticationPrincipal User user) {
+        pathValidator.directoryPathValidation(path);
 
-        //Создание / аплоад пустой папки.
-        //
-        //POST /directory?path=$path
+        minioService.createDirectory(path, user.getId());
+        MinioResource resource = minioService.getResource(path, user.getId());
+        ResourceResponse resourceResponse = resourceDataResponseMapper.toResponse(resource);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(resourceResponse);
     }
 }
