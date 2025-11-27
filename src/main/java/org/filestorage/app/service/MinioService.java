@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.StreamSupport;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -85,16 +86,21 @@ public class MinioService {
     public List<MinioResource> getResources(String path, Long userId){
         List<MinioResource> resources = new ArrayList<>();
 
+        String normalizedPath = path.equals("/") ? "" : path;
+        String prefix = getUserPrefix(userId) + normalizedPath;
+
         try {
             Iterable<Result<Item>> results = minioClient.listObjects(
                     ListObjectsArgs.builder()
                             .bucket(defaultBucket)
-                            .prefix(getUserPrefix(userId) + path)
+                            .prefix(prefix)
                             .build()
             );
 
             for (Result<Item> result : results) {
                 Item item = result.get();
+
+                if (item.objectName().equals(prefix)) continue;
 
                 MinioResource resource = new MinioResource();
                 if(item.objectName().endsWith("/")){
