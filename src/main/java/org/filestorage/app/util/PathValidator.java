@@ -13,15 +13,38 @@ public class PathValidator {
     private final MinioService minioService;
 
     public void pathValidation(String path) {
-        if(path == null || path.isBlank()){
+        if(!isValidPath(path)) {
             throw new PathNotValidException("Path not valid");
         }
     }
 
     public void directoryPathValidation(String path) {
-        if(path == null || path.isBlank() || !path.endsWith("/")){
+        if(!path.endsWith("/") && !isValidPath(path)) {
             throw new PathNotValidException("Path not valid");
         }
+    }
+
+    private boolean isValidPath(String path) {
+        if (path == null || path.isBlank()) {
+            return false;
+        }
+
+        if (!path.matches("^[a-zA-Z0-9._\\-/]+$")) {
+            return false;
+        }
+
+        if (path.contains("..") || path.contains("//")) {
+            return false;
+        }
+
+        String[] segments = path.split("/");
+        for (String segment : segments) {
+            if (segment.equals(".") || segment.isBlank()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public void prefixValidation(String path, Long userId){
