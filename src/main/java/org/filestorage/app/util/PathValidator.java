@@ -19,7 +19,7 @@ public class PathValidator {
     }
 
     public void directoryPathValidation(String path) {
-        if(!path.endsWith("/") && !isValidPath(path)) {
+        if(!path.endsWith("/") || !isValidPath(path)) {
             throw new PathNotValidException("Path not valid");
         }
     }
