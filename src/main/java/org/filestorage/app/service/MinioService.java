@@ -145,7 +145,7 @@ public class MinioService {
 
     private MinioResource getDirectory(String path){
         return new MinioResource(
-                path,
+                extractDirectoryPath(path),
                 extractDirectoryName(path),
                 null,
                 ResourceType.DIRECTORY
@@ -437,9 +437,25 @@ public class MinioService {
     }
 
     private String extractDirectoryName(String path){
-        String normalizedPath = path.substring(0, path.length() - 1);
-        int slashIndex = normalizedPath.lastIndexOf("/");
-        return slashIndex > 0 ? normalizedPath.substring(slashIndex + 1) : normalizedPath;
+        if(path.equals("/")){
+            return path;
+        } else {
+            String normalizedPath = path.substring(0, path.length() - 1);
+            int slashIndex = normalizedPath.lastIndexOf("/");
+            return slashIndex > 0 ? normalizedPath.substring(slashIndex + 1) : normalizedPath;
+        }
+    }
+
+    private String extractDirectoryPath(String path){
+        long count = path.chars().filter(c -> c == '/').count();
+
+        if(count <= 1) {
+            return "/";
+        } else {
+            String normalizedPath = path.substring(0, path.length() - 1);
+            int slashIndex = normalizedPath.lastIndexOf("/");
+            return normalizedPath.substring(0, slashIndex + 1);
+        }
     }
 
     private String extractFileName(String sourcePath){
