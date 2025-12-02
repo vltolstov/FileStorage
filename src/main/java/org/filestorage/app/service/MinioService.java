@@ -19,8 +19,10 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.StreamSupport;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -120,6 +122,51 @@ public class MinioService {
             }
         } catch (Exception e) {
             throw new MinioOperationException("Error getting resources list from " + path);
+        }
+
+        return resources;
+    }
+
+    public List<MinioResource> getResourcesByUser(Long userId, String query){
+
+        List<MinioResource> resources = new ArrayList<>();
+        Iterable<Result<Item>> results;
+        Set<String> resourcesSet = new LinkedHashSet<>();
+
+        try {
+            results = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(defaultBucket)
+                            .prefix(getUserPrefix(userId))
+                            .recursive(true)
+                            .build()
+            );
+
+            for (Result<Item> result : results) {
+                Item item = result.get();
+                if (item.objectName().equals(getUserPrefix(userId))) continue;
+
+                int indexOfFirstSlash = item.objectName().indexOf("/");
+                String path = item.objectName().substring(indexOfFirstSlash + 1, item.objectName().length());
+
+                resourcesSet.add(path);
+
+                if (!path.endsWith("/")) {
+                    path = path.substring(0, path.lastIndexOf('/') + 1);
+                }
+
+                while (path.contains("/")) {
+                    resourcesSet.add(path);
+                    path = path.substring(0, path.substring(0, path.length() - 1).lastIndexOf('/') + 1);
+                }
+            }
+        } catch (Exception e) {
+            throw new MinioOperationException("Error getting resources list from " + getUserPrefix(userId));
+        }
+
+        for(String path : resourcesSet){
+            MinioResource resource = getResource(path, userId);
+            if(resource.getName().contains(query)) resources.add(resource);
         }
 
         return resources;
