@@ -3,6 +3,7 @@ package org.filestorage.app.util;
 import lombok.RequiredArgsConstructor;
 import org.filestorage.app.exception.PathNotValidException;
 import org.filestorage.app.exception.ResourceNotFoundException;
+import org.filestorage.app.repository.MinioRepository;
 import org.filestorage.app.service.MinioService;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class PathValidator {
 
     private final MinioService minioService;
+    private final MinioRepository minioRepository;
 
     public void pathValidation(String path) {
         if(!isValidPath(path)) {
@@ -48,14 +50,9 @@ public class PathValidator {
     }
 
     public void prefixValidation(String path, Long userId){
-        if(path.endsWith("/")){
-            if(!minioService.isDirectoryExist(path, userId)){
-                throw new ResourceNotFoundException("Directory " + path + " not found");
-            }
-        } else {
-            if(!minioService.isFileExist(path, userId)){
-                throw new ResourceNotFoundException("File " + path + " not found");
-            }
+        String prefix = minioService.constructUserPrefix(userId) + path;
+        if(!minioRepository.exists(prefix)){
+            throw new ResourceNotFoundException("Resource " + path + " not found");
         }
     }
 

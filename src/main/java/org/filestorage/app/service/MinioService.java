@@ -4,14 +4,12 @@ import io.minio.*;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
-import org.filestorage.app.dto.ResourceResponse;
 import org.filestorage.app.exception.MinioOperationException;
 import org.filestorage.app.exception.ResourceAlreadyExistException;
 import org.filestorage.app.model.MinioResource;
+import org.filestorage.app.repository.MinioRepository;
 import org.filestorage.app.util.ResourceType;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.env.PropertyResolver;
-import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -21,8 +19,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -31,7 +29,6 @@ import java.util.zip.ZipOutputStream;
 @RequiredArgsConstructor
 public class MinioService {
 
-    private final PropertyResolver propertyResolver;
     @Value("${minio.default.bucket}")
     private String defaultBucket;
 
@@ -42,6 +39,8 @@ public class MinioService {
     private String userSuffix;
 
     private final MinioClient minioClient;
+
+    private final MinioRepository minioRepository;
 
     public MinioResource getResource(String path, Long userId){
         if(path.endsWith("/")){
@@ -68,15 +67,15 @@ public class MinioService {
     }
 
     public void moveResource(String from, String to, Long userId){
+        String prefixTo = constructUserPrefix(userId) + to;
+
+        if(minioRepository.exists(prefixTo)){
+            throw new ResourceAlreadyExistException("Resource already exists");
+        }
+
         if(from.endsWith("/")){
-            if(isDirectoryExist(to, userId)){
-                throw new ResourceAlreadyExistException("Directory " + to + " already exists");
-            }
             moveDirectory(from, to, userId);
         } else {
-            if(isFileExist(to, userId)){
-                throw new ResourceAlreadyExistException("File " + to + " already exists");
-            }
             moveFile(from, to, userId);
         }
     }
@@ -91,37 +90,28 @@ public class MinioService {
         List<MinioResource> resources = new ArrayList<>();
 
         String normalizedPath = path.equals("/") ? "" : path;
-        String prefix = getUserPrefix(userId) + normalizedPath;
+        String prefix = constructUserPrefix(userId) + normalizedPath;
 
-        try {
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .prefix(prefix)
-                            .build()
-            );
+        Iterable<Result<Item>> results = minioRepository.list(prefix, false);
 
-            for (Result<Item> result : results) {
-                Item item = result.get();
+        for (Result<Item> result : results) {
+            Item item = minioRepository.extractItem(result);
 
-                if (item.objectName().equals(prefix)) continue;
+            if (item.objectName().equals(prefix)) continue;
 
-                MinioResource resource = new MinioResource();
-                if(item.objectName().endsWith("/")){
-                    resource.setPath(path);
-                    resource.setName(extractDirectoryName(item.objectName()));
-                    resource.setType(ResourceType.DIRECTORY);
-                } else {
-                    resource.setPath(path);
-                    resource.setName(extractFileName(item.objectName()));
-                    resource.setSize(item.size());
-                    resource.setType(ResourceType.FILE);
-                }
+            MinioResource resource = new MinioResource();
+            resource.setPath(path);
 
-                resources.add(resource);
+            if(item.objectName().endsWith("/")){
+                resource.setName(extractDirectoryName(item.objectName()));
+                resource.setType(ResourceType.DIRECTORY);
+            } else {
+                resource.setName(extractFileName(item.objectName()));
+                resource.setSize(item.size());
+                resource.setType(ResourceType.FILE);
             }
-        } catch (Exception e) {
-            throw new MinioOperationException("Error getting resources list from " + path);
+
+            resources.add(resource);
         }
 
         return resources;
@@ -130,38 +120,29 @@ public class MinioService {
     public List<MinioResource> getResourcesByUser(Long userId, String query){
 
         List<MinioResource> resources = new ArrayList<>();
-        Iterable<Result<Item>> results;
+
         Set<String> resourcesSet = new LinkedHashSet<>();
+        String prefix = constructUserPrefix(userId);
 
-        try {
-            results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .prefix(getUserPrefix(userId))
-                            .recursive(true)
-                            .build()
-            );
+        Iterable<Result<Item>> results = minioRepository.list(prefix, true);
 
-            for (Result<Item> result : results) {
-                Item item = result.get();
-                if (item.objectName().equals(getUserPrefix(userId))) continue;
+        for (Result<Item> result : results) {
+            Item item = minioRepository.extractItem(result);
+            if (item.objectName().equals(prefix)) continue;
 
-                int indexOfFirstSlash = item.objectName().indexOf("/");
-                String path = item.objectName().substring(indexOfFirstSlash + 1, item.objectName().length());
+            int indexOfFirstSlash = item.objectName().indexOf("/");
+            String path = item.objectName().substring(indexOfFirstSlash + 1, item.objectName().length());
 
-                resourcesSet.add(path);
+            resourcesSet.add(path);
 
-                if (!path.endsWith("/")) {
-                    path = path.substring(0, path.lastIndexOf('/') + 1);
-                }
-
-                while (path.contains("/")) {
-                    resourcesSet.add(path);
-                    path = path.substring(0, path.substring(0, path.length() - 1).lastIndexOf('/') + 1);
-                }
+            if (!path.endsWith("/")) {
+                path = path.substring(0, path.lastIndexOf('/') + 1);
             }
-        } catch (Exception e) {
-            throw new MinioOperationException("Error getting resources list from " + getUserPrefix(userId));
+
+            while (path.contains("/")) {
+                resourcesSet.add(path);
+                path = path.substring(0, path.substring(0, path.length() - 1).lastIndexOf('/') + 1);
+            }
         }
 
         for(String path : resourcesSet){
@@ -173,21 +154,13 @@ public class MinioService {
     }
 
     public void createDirectory(String path, Long userId){
-        if(isDirectoryExist(path, userId)){
+        String prefix = constructUserPrefix(userId) + path;
+
+        if(minioRepository.exists(prefix)){
             throw new ResourceAlreadyExistException("Directory " + path + " already exists");
         }
 
-        try {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId) + path)
-                            .stream(new ByteArrayInputStream(new byte[0]), 0, -1)
-                            .build()
-            );
-        } catch (Exception e) {
-            throw new MinioOperationException("Error creating directory " + path);
-        }
+        minioRepository.putObject(prefix, new ByteArrayInputStream(new byte[0]), 0L);
     }
 
     private MinioResource getDirectory(String path){
@@ -200,282 +173,131 @@ public class MinioService {
     }
 
     private MinioResource getFile(String path, Long userId){
-        try{
-            StatObjectResponse response = minioClient.statObject(
-                    StatObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId) + path)
-                            .build()
-            );
-            return new MinioResource(
-                    extractFilePath(path),
-                    extractFileName(path),
-                    response.size(),
-                    ResourceType.FILE
-            );
-        } catch (Exception e) {
-            throw new MinioOperationException("Error getting file " + path);
-        }
+        StatObjectResponse response = minioRepository.stat(constructUserPrefix(userId) + path);
+        return new MinioResource(
+                extractFilePath(path),
+                extractFileName(path),
+                response.size(),
+                ResourceType.FILE
+        );
     }
 
     private void deleteDirectory(String path, Long userId){
-        try {
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .prefix(getUserPrefix(userId) + path)
-                            .recursive(true)
-                            .build()
-            );
 
-            List<DeleteObject> objects = StreamSupport.stream(results.spliterator(), false)
-                    .map(result -> {
-                        try {
-                            return new DeleteObject(result.get().objectName());
-                        } catch (Exception e) {
-                            throw new MinioOperationException("Error collect files for deleting from " + path);
-                        }
-                    })
-                    .toList();
+        Iterable<Result<Item>> results = minioRepository.list(constructUserPrefix(userId) + path, true);
 
-            if(objects.isEmpty()){
-                objects.add(new DeleteObject(getUserPrefix(userId) + path));
-            }
+        List<DeleteObject> objects = StreamSupport.stream(results.spliterator(), false)
+                .map(minioRepository::extractItem)
+                .map(Item::objectName)
+                .map(DeleteObject::new)
+                .collect(Collectors.toCollection(ArrayList::new));
 
-            minioClient.removeObjects(
-                    RemoveObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .objects(objects)
-                            .build()
-            ).forEach(result -> {
-                try { result.get(); } catch (Exception e) {
-                    throw new MinioOperationException("Error deleting files from " + path);
-                }
-            });
-
-        } catch (Exception e) {
-            throw new MinioOperationException("Error deleting directory " + path);
+        if(objects.isEmpty()){
+            objects.add(new DeleteObject(constructUserPrefix(userId) + path));
         }
+
+        minioRepository.removeObjects(objects);
     }
 
     private void deleteFile(String path, Long userId){
-        try {
-            minioClient.removeObject(
-                    RemoveObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId) + path)
-                            .build()
-            );
-        } catch (Exception e) {
-            throw new MinioOperationException("Error deleting file " + path);
-        }
+        minioRepository.removeObject(constructUserPrefix(userId) + path);
     }
 
     private StreamingResponseBody downloadDirectory(String path, Long userId){
-        try {
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .prefix(getUserPrefix(userId) + path)
-                            .recursive(true)
-                            .build()
-            );
 
-            StreamingResponseBody stream = outputStream -> {
-                try (ZipOutputStream zipOut = new ZipOutputStream(outputStream)) {
-                    for (Result<Item> result : results) {
-                        Item item = result.get();
-                        if (item.isDir()) continue;
+        Iterable<Result<Item>> results = minioRepository.list(constructUserPrefix(userId) + path, true);
 
-                        try (InputStream input = minioClient.getObject(
-                                GetObjectArgs.builder()
-                                        .bucket(defaultBucket)
-                                        .object(item.objectName())
-                                        .build()
-                        )) {
-                            ZipEntry entry = new ZipEntry(item.objectName().substring((getUserPrefix(userId) + path).length()));
-                            zipOut.putNextEntry(entry);
-                            input.transferTo(zipOut);
-                            zipOut.closeEntry();
-                        }
+        StreamingResponseBody stream = outputStream -> {
+            try (ZipOutputStream zipOut = new ZipOutputStream(outputStream)) {
+                String prefix = (constructUserPrefix(userId) + path);
+
+                for (Result<Item> result : results) {
+                    Item item = minioRepository.extractItem(result);
+                    if (item.isDir()) continue;
+
+                    String objectName = item.objectName();
+
+                    String entryName = objectName.substring(prefix.length());
+                    try (InputStream input = minioRepository.getObject(objectName)) {
+                        ZipEntry entry = new ZipEntry(entryName);
+                        zipOut.putNextEntry(entry);
+                        input.transferTo(zipOut);
+                        zipOut.closeEntry();
                     }
-                } catch (Exception e) {
-                    throw new MinioOperationException("Error zip processing " + path);
+
                 }
-            };
-            return stream;
-        } catch (Exception e) {
-            throw new MinioOperationException("Error downloading directory " + path);
-        }
+            } catch (Exception e) {
+                throw new MinioOperationException("Error zip processing " + path, e);
+            }
+        };
+
+        return stream;
     }
 
     private StreamingResponseBody downloadFile(String path, Long userId){
-        try {
-            GetObjectResponse object = minioClient.getObject(
-                    GetObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId) + path)
-                            .build()
-            );
-
-            return outputStream -> {
-                try (InputStream input = object){
-                    input.transferTo(outputStream);
-                }
-            };
-        } catch (Exception e) {
-            throw new MinioOperationException("Error downloading file " + path);
-        }
+        GetObjectResponse object = minioRepository.getObject(constructUserPrefix(userId) + path);
+        return outputStream -> {
+            try (InputStream input = object){
+                input.transferTo(outputStream);
+            }
+        };
     }
 
     private void moveDirectory(String from, String to, Long userId){
 
-        String source = getUserPrefix(userId) + from;
+        String source = constructUserPrefix(userId) + from;
+        List<Item> items = new ArrayList<>();
+        Iterable<Result<Item>> results = minioRepository.list(source, true);
 
-        try {
-            List<Item> items = new ArrayList<>();
+        for (Result<Item> result : results) {
+            items.add(minioRepository.extractItem(result));
+        }
 
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .prefix(source)
-                            .recursive(true)
-                            .build()
-            );
+        for (Item item : items) {
+            String target = item.objectName().replaceFirst(source, "");
+            String targetPath = constructUserPrefix(userId) + to + target;
+            minioRepository.copyObject(targetPath, item.objectName());
+        }
 
-            for (Result<Item> result : results) {
-                items.add(result.get());
-            }
-
-            for (Item item : items) {
-                String target = item.objectName().replaceFirst(source, "");
-
-                minioClient.copyObject(
-                        CopyObjectArgs.builder()
-                                .bucket(defaultBucket)
-                                .object(getUserPrefix(userId) + to + target)
-                                .source(
-                                        CopySource.builder()
-                                                .bucket(defaultBucket)
-                                                .object(item.objectName())
-                                                .build()
-                                )
-                                .build()
-                );
-            }
-
-            for (Item item : items) {
-                minioClient.removeObject(
-                        RemoveObjectArgs.builder()
-                                .bucket(defaultBucket)
-                                .object(item.objectName())
-                                .build()
-                );
-            }
-        } catch (Exception e) {
-            throw new MinioOperationException("Error moving directory " + from + " to " + to);
+        for (Item item : items) {
+            minioRepository.removeObject(item.objectName());
         }
     }
 
     private void moveFile(String from, String to, Long userId){
-        String sourcePath = getUserPrefix(userId) + from;
-        String targetPath = getUserPrefix(userId) + to;
-        try{
-            minioClient.copyObject(
-                    CopyObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(targetPath)
-                            .source(
-                                    CopySource.builder()
-                                            .bucket(defaultBucket)
-                                            .object(sourcePath)
-                                            .build()
-                            )
-                            .build()
-            );
-            minioClient.removeObject(
-                    RemoveObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(sourcePath)
-                            .build()
-            );
-        } catch (Exception e) {
-            throw new MinioOperationException("Error move file " + from + " to " + to);
-        }
+        String sourcePath = constructUserPrefix(userId) + from;
+        String targetPath = constructUserPrefix(userId) + to;
+
+        minioRepository.copyObject(sourcePath, targetPath);
+        minioRepository.removeObject(sourcePath);
     }
 
-    private void uploadProcess(String path, Long userId, MultipartFile resource){
+    private void uploadProcess(String path, Long userId, MultipartFile resource) {
 
-        String target = path + resource.getOriginalFilename();
+        String prefix = constructUserPrefix(userId) + path + resource.getOriginalFilename();
 
-        if(isFileExist(target, userId)) {
-            throw new ResourceAlreadyExistException("File already exists");
+        if(minioRepository.exists(prefix)) {
+            throw new ResourceAlreadyExistException("Resource already exists");
         }
-        if(isDirectoryExist(target, userId)) {
-            throw new ResourceAlreadyExistException("Directory already exists");
-        }
+
         if(resource.isEmpty()) {
             throw new MinioOperationException("Resource is empty");
         };
 
         try {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId) + target)
-                            .stream(resource.getInputStream(), resource.getSize(), -1)
-                            .build()
-            );
+            minioRepository.putObject(prefix, resource.getInputStream(), resource.getSize());
         } catch (Exception e) {
-            throw new MinioOperationException("Error uploading file " + path);
+            throw new MinioOperationException("Error uploading resource " + path, e);
         }
-    }
 
-    public boolean isDirectoryExist(String path, Long userId){
-        try {
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(defaultBucket)
-                            .prefix(getUserPrefix(userId) + path)
-                            .recursive(false)
-                            .maxKeys(1)
-                            .build()
-            );
-            return results.iterator().hasNext();
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public boolean isFileExist(String path, Long userId){
-        try {
-            minioClient.statObject(
-                    StatObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId) + path)
-                            .build()
-            );
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     public void createUserPrefix(Long userId){
-        try {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(defaultBucket)
-                            .object(getUserPrefix(userId))
-                            .stream(new ByteArrayInputStream(new byte[0]), 0, -1)
-                            .build()
-            );
-        } catch (Exception exception) {
-            throw new MinioOperationException("Error creating prefix for user " + userId);
-        }
+        String prefix = constructUserPrefix(userId);
+        minioRepository.putObject(prefix, new ByteArrayInputStream(new byte[0]), 0L);
     }
 
-    private String getUserPrefix(Long userId){
+    public String constructUserPrefix(Long userId){
         StringBuilder prefix = new StringBuilder();
         prefix.append(userPrefix);
         prefix.append(userId);
