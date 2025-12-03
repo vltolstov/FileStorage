@@ -147,7 +147,7 @@ public class MinioService {
 
         for(String path : resourcesSet){
             MinioResource resource = getResource(path, userId);
-            if(resource.getName().contains(query)) resources.add(resource);
+            if(resource.getName().toLowerCase().contains(query.toLowerCase())) resources.add(resource);
         }
 
         return resources;
