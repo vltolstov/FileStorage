@@ -311,7 +311,7 @@ public class MinioService {
         } else {
             String normalizedPath = path.substring(0, path.length() - 1);
             int slashIndex = normalizedPath.lastIndexOf("/");
-            return slashIndex > 0 ? normalizedPath.substring(slashIndex + 1) : normalizedPath;
+            return slashIndex > 0 ? path.substring(slashIndex + 1) : path;
         }
     }
 
