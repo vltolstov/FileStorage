@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Ftont React Node Modules ###
+frontend/node_modules/
