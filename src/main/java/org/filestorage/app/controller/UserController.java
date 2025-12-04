@@ -13,12 +13,14 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/api/user")
 public class UserController {
 
     @Operation(summary = "Информация о пользователе", description = "Возвращает username пользователя")
@@ -26,7 +28,7 @@ public class UserController {
             @ApiResponse(responseCode = "200", description = "Успех"),
             @ApiResponse(responseCode = "401", description = "Пользователь не авторизован")
     })
-    @GetMapping("/user/me")
+    @GetMapping("/me")
     public ResponseEntity<Map<String, String>> getUser(HttpServletRequest request, HttpServletResponse response) {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

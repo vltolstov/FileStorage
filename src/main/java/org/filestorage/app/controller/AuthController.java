@@ -24,6 +24,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -31,6 +32,7 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/api/auth")
 public class AuthController {
 
     private final UserService userService;
@@ -42,7 +44,7 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Ошибка валидации"),
             @ApiResponse(responseCode = "409", description = "Пользователь уже существует")
     })
-    @PostMapping("/auth/sign-up")
+    @PostMapping("/sign-up")
     public ResponseEntity<Map <String, String>> signUp(@Valid @RequestBody UserRequest userRequest, HttpServletRequest request, HttpServletResponse response) {
         UserResponse userResponse = userService.create(userRequest);
         authenticateSession(request, response, userRequest.getUsername());
@@ -58,7 +60,7 @@ public class AuthController {
             @ApiResponse(responseCode = "400", description = "Ошибка валидации"),
             @ApiResponse(responseCode = "401", description = "Неверные данные: пользователя нет или пароль неправильный")
     })
-    @PostMapping("/auth/sign-in")
+    @PostMapping("/sign-in")
     public ResponseEntity<Map<String, String>> signIn(@Valid @RequestBody UserRequest userRequest, HttpServletRequest request, HttpServletResponse response) {
         UserResponse userResponse = userService.getUser(userRequest);
         authenticateSession(request, response, userRequest.getUsername());
@@ -73,7 +75,7 @@ public class AuthController {
             @ApiResponse(responseCode = "204", description = "Успешный выход"),
             @ApiResponse(responseCode = "401", description = "Пользователь не авторизован")
     })
-    @PostMapping("/auth/sign-out")
+    @PostMapping("/sign-out")
     public ResponseEntity<Void> signOut(HttpServletRequest request, HttpServletResponse response) {
 
         if(request.getSession(false) == null) {

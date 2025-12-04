@@ -11,6 +11,7 @@ import org.filestorage.app.model.User;
 import org.filestorage.app.service.MinioService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,6 +20,7 @@ import static org.filestorage.app.util.QueryValidator.validate;
 
 @RestController
 @RequiredArgsConstructor
+@RequestMapping("/api/resource")
 public class SearchResourceController {
 
     private final MinioService minioService;
@@ -31,7 +33,7 @@ public class SearchResourceController {
             @ApiResponse(responseCode = "401", description = "Пользователь не авторизован"),
             @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
     })
-    @GetMapping("/resource/search")
+    @GetMapping("/search")
     public List<ResourceResponse> searchResource(@RequestParam String query, @AuthenticationPrincipal User user) {
         validate(query);
 
