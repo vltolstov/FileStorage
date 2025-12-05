@@ -26,7 +26,7 @@ public class PathValidator {
             return false;
         }
 
-        if (!path.matches("^[a-zA-Z0-9._\\- /]+$")) {
+        if (!path.matches("^[\\p{L}0-9._\\-/ ]+$")) {
             return false;
         }
 
