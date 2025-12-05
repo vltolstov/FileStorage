@@ -6,6 +6,7 @@ import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;
 import org.filestorage.app.exception.MinioOperationException;
 import org.filestorage.app.exception.ResourceAlreadyExistException;
+import org.filestorage.app.exception.ResourceSizeException;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.repository.MinioRepository;
 import org.filestorage.app.util.ResourceType;
@@ -38,7 +39,7 @@ public class MinioService {
     @Value("${minio.user.suffix}")
     private String userSuffix;
 
-    private final MinioClient minioClient;
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
 
     private final MinioRepository minioRepository;
 
@@ -82,6 +83,10 @@ public class MinioService {
 
     public void uploadResource(String path, Long userId, MultipartFile[] resources) {
         for(MultipartFile resource : resources) {
+            if(resource.getSize() > MAX_FILE_SIZE) {
+                throw new ResourceSizeException("File " + resource.getName() + " is too large");
+            }
+
             uploadProcess(path, userId, resource);
         }
     }
@@ -268,7 +273,7 @@ public class MinioService {
         String sourcePath = constructUserPrefix(userId) + from;
         String targetPath = constructUserPrefix(userId) + to;
 
-        minioRepository.copyObject(sourcePath, targetPath);
+        minioRepository.copyObject(targetPath, sourcePath);
         minioRepository.removeObject(sourcePath);
     }
 
