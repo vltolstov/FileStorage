@@ -89,9 +89,6 @@ public class AuthController {
             session.invalidate();
         }
 
-        Cookie cookie = cookieInit("");
-        response.addCookie(cookie);
-
         return ResponseEntity
                 .noContent()
                 .build();
@@ -110,9 +107,6 @@ public class AuthController {
         SecurityContextHolder.setContext(context);
         request.getSession(true)
                 .setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
-
-        Cookie cookie = cookieInit(request.getSession().getId());
-        response.addCookie(cookie);
     }
 
     private Cookie cookieInit(String sessionId) {
