@@ -9,6 +9,7 @@ import org.filestorage.app.mapper.ResourceDataResponseMapper;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.model.User;
 import org.filestorage.app.service.MinioService;
+import org.filestorage.app.util.PathNormalizer;
 import org.filestorage.app.util.PathValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -44,6 +45,7 @@ public class ResourceController {
     })
     @GetMapping("/resource")
     public ResponseEntity<ResourceResponse> getResourceData(@RequestParam String path, @AuthenticationPrincipal User user){
+        path = PathNormalizer.normalize(path);
         pathValidator.pathValidation(path);
         pathValidator.prefixValidation(path, user.getId());
 
@@ -65,6 +67,7 @@ public class ResourceController {
     })
     @DeleteMapping("/resource")
     public ResponseEntity<ResourceResponse> deleteResource(@RequestParam String path, @AuthenticationPrincipal User user){
+        path = PathNormalizer.normalize(path);
         pathValidator.pathValidation(path);
         pathValidator.prefixValidation(path, user.getId());
 
@@ -85,6 +88,7 @@ public class ResourceController {
     })
     @GetMapping("/resource/download")
     public ResponseEntity<StreamingResponseBody> downloadResource(@RequestParam String path, @AuthenticationPrincipal User user){
+        path = PathNormalizer.normalize(path);
         pathValidator.pathValidation(path);
         pathValidator.prefixValidation(path, user.getId());
 
@@ -106,6 +110,8 @@ public class ResourceController {
     })
     @GetMapping("/resource/move")
     public ResponseEntity<ResourceResponse> moveResource(@RequestParam String from, @RequestParam String to, @AuthenticationPrincipal User user){
+        from = PathNormalizer.normalize(from);
+        to = PathNormalizer.normalize(to);
         pathValidator.pathValidation(from);
         pathValidator.pathValidation(to);
         pathValidator.prefixValidation(from, user.getId());
@@ -128,10 +134,12 @@ public class ResourceController {
             @ApiResponse(responseCode = "500", description = "Неизвестная ошибка")
     })
     @PostMapping("/resource")
-    public ResponseEntity<List<ResourceResponse>> uploadResource(@RequestParam String path, @RequestParam MultipartFile[] resources, @AuthenticationPrincipal User user) {
+    public ResponseEntity<List<ResourceResponse>> uploadResource(@RequestParam String path, @RequestParam MultipartFile[] object, @AuthenticationPrincipal User user) {
+
+        path = PathNormalizer.normalize(path);
         pathValidator.pathValidation(path);
 
-        minioService.uploadResource(path, user.getId(), resources);
+        minioService.uploadResource(path, user.getId(), object);
         List<MinioResource> uploadedResources = minioService.getResources(path, user.getId());
 
         List<ResourceResponse> resultList = uploadedResources.stream()

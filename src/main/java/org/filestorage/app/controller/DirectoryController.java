@@ -9,6 +9,7 @@ import org.filestorage.app.mapper.ResourceDataResponseMapper;
 import org.filestorage.app.model.MinioResource;
 import org.filestorage.app.model.User;
 import org.filestorage.app.service.MinioService;
+import org.filestorage.app.util.PathNormalizer;
 import org.filestorage.app.util.PathValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,7 +42,8 @@ public class DirectoryController {
     })
     @GetMapping("/directory")
     public ResponseEntity<List<ResourceResponse>> getDirectory(@RequestParam String path, @AuthenticationPrincipal User user) {
-        pathValidator.directoryPathValidation(path);
+        path = PathNormalizer.normalize(path);
+        pathValidator.pathValidation(path);
         pathValidator.prefixValidation(path, user.getId());
 
         List<MinioResource> resources = minioService.getResources(path, user.getId());
@@ -66,7 +68,8 @@ public class DirectoryController {
     })
     @PostMapping("/directory")
     public ResponseEntity<ResourceResponse> postDirectory(@RequestParam String path, @AuthenticationPrincipal User user) {
-        pathValidator.directoryPathValidation(path);
+        path = PathNormalizer.normalize(path);
+        pathValidator.pathValidation(path);
 
         minioService.createDirectory(path, user.getId());
         MinioResource resource = minioService.getResource(path, user.getId());

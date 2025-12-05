@@ -15,33 +15,28 @@ public class PathValidator {
     private final MinioRepository minioRepository;
 
     public void pathValidation(String path) {
-        if(!isValidPath(path)) {
+        if (!isValidCommon(path)) {
             throw new PathNotValidException("Path not valid");
         }
     }
 
-    public void directoryPathValidation(String path) {
-        if(!path.endsWith("/") || !isValidPath(path)) {
-            throw new PathNotValidException("Path not valid");
-        }
-    }
+    private boolean isValidCommon(String path) {
 
-    private boolean isValidPath(String path) {
-        if (path == null || path.isBlank()) {
+        if (path.contains("//")) {
             return false;
         }
 
-        if (!path.matches("^[a-zA-Z0-9._\\-/]+$")) {
-            return false;
-        }
-
-        if (path.contains("..") || path.contains("//")) {
+        if (!path.matches("^[a-zA-Z0-9._\\- /]+$")) {
             return false;
         }
 
         String[] segments = path.split("/");
+
         for (String segment : segments) {
-            if (segment.equals(".") || segment.isBlank()) {
+            if (segment.isBlank()) {
+                return false;
+            }
+            if (segment.equals(".") || segment.equals("..")) {
                 return false;
             }
         }
