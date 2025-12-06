@@ -8,13 +8,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MinioConfig {
 
-    @Value("${minio.endpoint}")
+    @Value("${minio.url}")
     private String minioEndpoint;
 
-    @Value("${minio.username}")
+    @Value("${minio.access-key}")
     private String userName;
 
-    @Value("${minio.password}")
+    @Value("${minio.secret-key}")
     private String password;
 
     @Bean
